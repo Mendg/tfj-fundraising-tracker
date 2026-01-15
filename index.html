@@ -482,15 +482,16 @@
     </div>
 
     <script>
-        // Cloud storage endpoint - data persists and syncs for everyone
-        const API_URL = 'https://jsonblob.com/api/jsonBlob/019bc227-dd48-7268-b2f6-ef1cac0054aa';
+        // Local storage key
+        const STORAGE_KEY = 'tfj-fundraising-data';
 
         let data = { pledges: [], goal: 60000 };
         let currentFilter = 'all';
 
-        async function init() {
-            await refreshData();
+        function init() {
+            loadData();
             document.getElementById('loadingOverlay').classList.add('hidden');
+            render();
         }
 
         function setSyncStatus(status, type) {
@@ -499,37 +500,39 @@
             el.className = 'sync-status ' + type;
         }
 
-        async function loadData() {
-            const response = await fetch(API_URL);
-            if (!response.ok) throw new Error('Failed to load data');
-            return await response.json();
-        }
-
-        async function saveData() {
-            const response = await fetch(API_URL, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            if (!response.ok) throw new Error('Failed to save data');
-        }
-
-        async function refreshData() {
-            setSyncStatus('Syncing...', 'syncing');
+        function loadData() {
             try {
-                data = await loadData();
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    data = JSON.parse(saved);
+                }
                 if (!data.pledges) data.pledges = [];
                 if (!data.goal) data.goal = 60000;
                 document.getElementById('goalInput').value = data.goal;
-                setSyncStatus('Synced - All changes save automatically', 'success');
-                render();
+                setSyncStatus('Data saved locally on this device', 'success');
             } catch (err) {
-                setSyncStatus('Error: ' + err.message, 'error');
-                console.error(err);
+                console.error('Error loading data:', err);
+                data = { pledges: [], goal: 60000 };
             }
         }
 
-        async function addPledge() {
+        function saveData() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                setSyncStatus('Saved!', 'success');
+            } catch (err) {
+                console.error('Error saving data:', err);
+                setSyncStatus('Error saving: ' + err.message, 'error');
+            }
+        }
+
+        function refreshData() {
+            loadData();
+            render();
+            setSyncStatus('Data saved locally on this device', 'success');
+        }
+
+        function addPledge() {
             const name = document.getElementById('pledgeName').value.trim();
             const amount = parseFloat(document.getElementById('pledgeAmount').value);
             const status = document.getElementById('pledgeStatus').value;
@@ -539,83 +542,42 @@
                 return;
             }
 
-            const btn = document.getElementById('addBtn');
-            btn.disabled = true;
-            btn.textContent = 'Adding...';
-            setSyncStatus('Saving...', 'syncing');
+            data.pledges.push({
+                id: Date.now().toString(),
+                name,
+                amount,
+                status,
+                createdAt: new Date().toISOString()
+            });
 
-            try {
-                data.pledges.push({
-                    id: Date.now().toString(),
-                    name,
-                    amount,
-                    status,
-                    createdAt: new Date().toISOString()
-                });
+            saveData();
+            document.getElementById('pledgeName').value = '';
+            document.getElementById('pledgeAmount').value = '';
+            document.getElementById('pledgeStatus').value = 'potential';
+            render();
+        }
 
-                await saveData();
-
-                document.getElementById('pledgeName').value = '';
-                document.getElementById('pledgeAmount').value = '';
-                document.getElementById('pledgeStatus').value = 'potential';
-                setSyncStatus('Saved!', 'success');
+        function updateStatus(id, newStatus) {
+            const pledge = data.pledges.find(p => p.id === id);
+            if (pledge) {
+                pledge.status = newStatus;
+                saveData();
                 render();
-            } catch (err) {
-                setSyncStatus('Error: ' + err.message, 'error');
-                alert('Failed to add pledge: ' + err.message);
-                // Remove the pledge we just added since save failed
-                data.pledges.pop();
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Add';
             }
         }
 
-        async function updateStatus(id, newStatus) {
-            setSyncStatus('Saving...', 'syncing');
-            try {
-                const pledge = data.pledges.find(p => p.id === id);
-                if (pledge) {
-                    pledge.status = newStatus;
-                    await saveData();
-                    setSyncStatus('Saved!', 'success');
-                    render();
-                }
-            } catch (err) {
-                setSyncStatus('Error: ' + err.message, 'error');
-                alert('Failed to update: ' + err.message);
-                await refreshData(); // Reload to get correct state
-            }
-        }
-
-        async function deletePledge(id) {
+        function deletePledge(id) {
             if (!confirm('Are you sure you want to remove this pledge?')) return;
-
-            setSyncStatus('Saving...', 'syncing');
-            const originalPledges = [...data.pledges];
-            try {
-                data.pledges = data.pledges.filter(p => p.id !== id);
-                await saveData();
-                setSyncStatus('Saved!', 'success');
-                render();
-            } catch (err) {
-                data.pledges = originalPledges;
-                setSyncStatus('Error: ' + err.message, 'error');
-                alert('Failed to delete: ' + err.message);
-            }
+            data.pledges = data.pledges.filter(p => p.id !== id);
+            saveData();
+            render();
         }
 
-        async function updateGoal() {
+        function updateGoal() {
             const newGoal = parseInt(document.getElementById('goalInput').value) || 60000;
-            setSyncStatus('Saving...', 'syncing');
-            try {
-                data.goal = newGoal;
-                await saveData();
-                setSyncStatus('Saved!', 'success');
-                render();
-            } catch (err) {
-                setSyncStatus('Error: ' + err.message, 'error');
-            }
+            data.goal = newGoal;
+            saveData();
+            render();
         }
 
         function setFilter(filter) {
