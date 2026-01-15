@@ -35,45 +35,6 @@
             margin-bottom: 20px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         }
-        .setup-card {
-            background: #fff3cd;
-            border: 2px solid #ffc107;
-        }
-        .setup-card h2 {
-            color: #856404;
-        }
-        .setup-card ol {
-            margin: 15px 0;
-            padding-left: 20px;
-        }
-        .setup-card li {
-            margin-bottom: 10px;
-            color: #856404;
-        }
-        .setup-card code {
-            background: rgba(0,0,0,0.1);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.9rem;
-        }
-        .setup-card input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ffc107;
-            border-radius: 8px;
-            font-size: 1rem;
-            margin-top: 10px;
-        }
-        .setup-card button {
-            margin-top: 10px;
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-        }
         .goal-section {
             text-align: center;
         }
@@ -371,16 +332,17 @@
             text-align: center;
             padding: 8px;
             font-size: 0.85rem;
-            color: #666;
+            color: white;
+            opacity: 0.8;
         }
         .sync-status.syncing {
             color: #ffc107;
         }
         .sync-status.error {
-            color: #dc3545;
+            color: #ff6b6b;
         }
         .sync-status.success {
-            color: #28a745;
+            color: #69db7c;
         }
         .loading-overlay {
             position: fixed;
@@ -388,7 +350,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(30, 58, 95, 0.9);
+            background: rgba(30, 58, 95, 0.95);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -423,7 +385,7 @@
     </style>
 </head>
 <body>
-    <div id="loadingOverlay" class="loading-overlay hidden">
+    <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-spinner">Loading...</div>
     </div>
 
@@ -431,263 +393,104 @@
         <h1>Team Friendship Jacksonville</h1>
         <p class="subtitle">Peer-to-Peer Fundraising Tracker</p>
 
-        <!-- Setup Card - shown when no Google Sheet URL is configured -->
-        <div class="card setup-card" id="setupCard">
-            <h2>One-Time Setup</h2>
-            <ol>
-                <li>Open <a href="https://docs.google.com/spreadsheets/create" target="_blank">Google Sheets</a> and create a new spreadsheet</li>
-                <li>In cell A1, type: <code>id</code>, B1: <code>name</code>, C1: <code>amount</code>, D1: <code>status</code>, E1: <code>createdAt</code>, F1: <code>goal</code></li>
-                <li>In cell F2, type: <code>60000</code> (your goal amount)</li>
-                <li>Go to <strong>Extensions → Apps Script</strong></li>
-                <li>Delete any code there and paste the script below, then click <strong>Save</strong></li>
-                <li>Click <strong>Deploy → New deployment</strong></li>
-                <li>Choose <strong>Web app</strong>, set "Who has access" to <strong>Anyone</strong>, click <strong>Deploy</strong></li>
-                <li>Copy the Web app URL and paste it below</li>
-            </ol>
-            <details>
-                <summary style="cursor: pointer; font-weight: 600; color: #856404;">Click to see the Apps Script code</summary>
-                <pre style="background: #f8f9fa; padding: 15px; border-radius: 8px; overflow-x: auto; margin-top: 10px; font-size: 0.8rem;">
-function doGet(e) {
-  return handleRequest(e);
-}
+        <div class="sync-status" id="syncStatus">Loading...</div>
 
-function doPost(e) {
-  return handleRequest(e);
-}
-
-function handleRequest(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  const action = e.parameter.action;
-
-  let result;
-
-  try {
-    if (action === 'get') {
-      result = getData(sheet);
-    } else if (action === 'add') {
-      result = addPledge(sheet, e.parameter);
-    } else if (action === 'update') {
-      result = updatePledge(sheet, e.parameter);
-    } else if (action === 'delete') {
-      result = deletePledge(sheet, e.parameter.id);
-    } else if (action === 'setGoal') {
-      result = setGoal(sheet, e.parameter.goal);
-    } else {
-      result = { error: 'Unknown action' };
-    }
-  } catch (err) {
-    result = { error: err.toString() };
-  }
-
-  return ContentService.createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function getData(sheet) {
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const pledges = [];
-  let goal = 60000;
-
-  // Check for goal in F2
-  if (data.length > 1 && data[1][5]) {
-    goal = Number(data[1][5]) || 60000;
-  }
-
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0]) { // has ID
-      pledges.push({
-        id: data[i][0],
-        name: data[i][1],
-        amount: Number(data[i][2]),
-        status: data[i][3],
-        createdAt: data[i][4]
-      });
-    }
-  }
-
-  return { pledges, goal };
-}
-
-function addPledge(sheet, params) {
-  const id = Date.now().toString();
-  const createdAt = new Date().toISOString();
-  const lastRow = Math.max(sheet.getLastRow() + 1, 2);
-
-  sheet.getRange(lastRow, 1, 1, 5).setValues([[
-    id, params.name, Number(params.amount), params.status, createdAt
-  ]]);
-
-  return { success: true, id, createdAt };
-}
-
-function updatePledge(sheet, params) {
-  const data = sheet.getDataRange().getValues();
-
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0].toString() === params.id.toString()) {
-      sheet.getRange(i + 1, 4).setValue(params.status);
-      return { success: true };
-    }
-  }
-
-  return { error: 'Pledge not found' };
-}
-
-function deletePledge(sheet, id) {
-  const data = sheet.getDataRange().getValues();
-
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0].toString() === id.toString()) {
-      sheet.deleteRow(i + 1);
-      return { success: true };
-    }
-  }
-
-  return { error: 'Pledge not found' };
-}
-
-function setGoal(sheet, goal) {
-  sheet.getRange('F2').setValue(Number(goal));
-  return { success: true };
-}</pre>
-            </details>
-            <input type="text" id="sheetUrl" placeholder="Paste your Web app URL here...">
-            <button onclick="saveSheetUrl()">Connect to Google Sheet</button>
+        <div class="card goal-section">
+            <div class="goal-edit">
+                <label for="goalInput">Goal: $</label>
+                <input type="number" id="goalInput" value="60000" onchange="updateGoal()">
+            </div>
+            <div class="amount-display">
+                $<span id="totalRaised">0</span>
+                <span class="goal">/ $<span id="goalDisplay">60,000</span></span>
+            </div>
+            <div class="progress-container" id="progressContainer">
+                <!-- Progress segments rendered by JS -->
+            </div>
+            <div class="progress-legend">
+                <div class="legend-item">
+                    <div class="legend-dot confirmed"></div>
+                    <span>Confirmed</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot pending"></div>
+                    <span>Pending</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot potential"></div>
+                    <span>Potential</span>
+                </div>
+            </div>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="confirmedTotal">$0</div>
+                    <div class="stat-label">Confirmed</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value pending" id="pendingTotal">$0</div>
+                    <div class="stat-label">Pending</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value potential" id="potentialTotal">$0</div>
+                    <div class="stat-label">Potential</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value remaining" id="remainingTotal">$60,000</div>
+                    <div class="stat-label">Still Needed</div>
+                </div>
+            </div>
         </div>
 
-        <!-- Main App - hidden until configured -->
-        <div id="mainApp" class="hidden">
-            <div class="sync-status" id="syncStatus">Connected to Google Sheets</div>
-
-            <div class="card goal-section">
-                <div class="goal-edit">
-                    <label for="goalInput">Goal: $</label>
-                    <input type="number" id="goalInput" value="60000" onchange="updateGoal()">
+        <div class="card">
+            <h2 style="margin-bottom: 20px;">Add Pledge</h2>
+            <div class="add-form">
+                <div class="form-group">
+                    <label for="pledgeName">Donor / Source</label>
+                    <input type="text" id="pledgeName" placeholder="e.g., John Smith, ABC Corp">
                 </div>
-                <div class="amount-display">
-                    $<span id="totalRaised">0</span>
-                    <span class="goal">/ $<span id="goalDisplay">60,000</span></span>
+                <div class="form-group">
+                    <label for="pledgeAmount">Amount</label>
+                    <input type="number" id="pledgeAmount" placeholder="1000">
                 </div>
-                <div class="progress-container" id="progressContainer">
-                    <!-- Progress segments rendered by JS -->
+                <div class="form-group">
+                    <label for="pledgeStatus">Status</label>
+                    <select id="pledgeStatus">
+                        <option value="potential">Potential (working on)</option>
+                        <option value="pending">Pending (committed)</option>
+                        <option value="confirmed">Confirmed (received)</option>
+                    </select>
                 </div>
-                <div class="progress-legend">
-                    <div class="legend-item">
-                        <div class="legend-dot confirmed"></div>
-                        <span>Confirmed</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-dot pending"></div>
-                        <span>Pending</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-dot potential"></div>
-                        <span>Potential</span>
-                    </div>
-                </div>
-                <div class="stats">
-                    <div class="stat">
-                        <div class="stat-value" id="confirmedTotal">$0</div>
-                        <div class="stat-label">Confirmed</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value pending" id="pendingTotal">$0</div>
-                        <div class="stat-label">Pending</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value potential" id="potentialTotal">$0</div>
-                        <div class="stat-label">Potential</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value remaining" id="remainingTotal">$60,000</div>
-                        <div class="stat-label">Still Needed</div>
-                    </div>
-                </div>
+                <button class="btn btn-primary" id="addBtn" onclick="addPledge()">Add</button>
             </div>
+        </div>
 
-            <div class="card">
-                <h2 style="margin-bottom: 20px;">Add Pledge</h2>
-                <div class="add-form">
-                    <div class="form-group">
-                        <label for="pledgeName">Donor / Source</label>
-                        <input type="text" id="pledgeName" placeholder="e.g., John Smith, ABC Corp">
-                    </div>
-                    <div class="form-group">
-                        <label for="pledgeAmount">Amount</label>
-                        <input type="number" id="pledgeAmount" placeholder="1000">
-                    </div>
-                    <div class="form-group">
-                        <label for="pledgeStatus">Status</label>
-                        <select id="pledgeStatus">
-                            <option value="potential">Potential (working on)</option>
-                            <option value="pending">Pending (committed)</option>
-                            <option value="confirmed">Confirmed (received)</option>
-                        </select>
-                    </div>
-                    <button class="btn btn-primary" id="addBtn" onclick="addPledge()">Add</button>
-                </div>
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2>Pledges</h2>
+                <button class="btn" style="background: #6c757d; color: white; padding: 8px 16px;" onclick="refreshData()">Refresh</button>
             </div>
-
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h2>Pledges</h2>
-                    <button class="btn" style="background: #6c757d; color: white; padding: 8px 16px;" onclick="refreshData()">Refresh</button>
-                </div>
-                <div class="filter-tabs">
-                    <button class="filter-tab active" onclick="setFilter('all')">All</button>
-                    <button class="filter-tab" onclick="setFilter('confirmed')">Confirmed</button>
-                    <button class="filter-tab" onclick="setFilter('pending')">Pending</button>
-                    <button class="filter-tab" onclick="setFilter('potential')">Potential</button>
-                </div>
-                <div class="pledges-list" id="pledgesList">
-                    <div class="empty-state">Loading...</div>
-                </div>
+            <div class="filter-tabs">
+                <button class="filter-tab active" onclick="setFilter('all')">All</button>
+                <button class="filter-tab" onclick="setFilter('confirmed')">Confirmed</button>
+                <button class="filter-tab" onclick="setFilter('pending')">Pending</button>
+                <button class="filter-tab" onclick="setFilter('potential')">Potential</button>
             </div>
-
-            <div style="text-align: center; margin-top: 10px;">
-                <button style="background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.8rem;" onclick="disconnect()">Disconnect from Google Sheet</button>
+            <div class="pledges-list" id="pledgesList">
+                <div class="empty-state">Loading...</div>
             </div>
         </div>
     </div>
 
     <script>
-        let pledges = [];
-        let goal = 60000;
+        // Cloud storage endpoint - data persists and syncs for everyone
+        const API_URL = 'https://jsonblob.com/api/jsonBlob/019bbf8b-d6cc-70db-bd25-ce9e4f5cbcab';
+
+        let data = { pledges: [], goal: 60000 };
         let currentFilter = 'all';
-        let sheetUrl = localStorage.getItem('tfj-sheet-url') || '';
 
-        function init() {
-            if (sheetUrl) {
-                document.getElementById('setupCard').classList.add('hidden');
-                document.getElementById('mainApp').classList.remove('hidden');
-                refreshData();
-            }
-        }
-
-        function saveSheetUrl() {
-            const url = document.getElementById('sheetUrl').value.trim();
-            if (!url) {
-                alert('Please enter the Web app URL');
-                return;
-            }
-            sheetUrl = url;
-            localStorage.setItem('tfj-sheet-url', url);
-            document.getElementById('setupCard').classList.add('hidden');
-            document.getElementById('mainApp').classList.remove('hidden');
-            refreshData();
-        }
-
-        function disconnect() {
-            if (confirm('Disconnect from Google Sheet? Your data will remain in the sheet.')) {
-                localStorage.removeItem('tfj-sheet-url');
-                sheetUrl = '';
-                location.reload();
-            }
-        }
-
-        function showLoading(show) {
-            document.getElementById('loadingOverlay').classList.toggle('hidden', !show);
+        async function init() {
+            await refreshData();
+            document.getElementById('loadingOverlay').classList.add('hidden');
         }
 
         function setSyncStatus(status, type) {
@@ -696,31 +499,33 @@ function setGoal(sheet, goal) {
             el.className = 'sync-status ' + type;
         }
 
-        async function apiCall(params) {
-            const url = new URL(sheetUrl);
-            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+        async function loadData() {
+            const response = await fetch(API_URL);
+            if (!response.ok) throw new Error('Failed to load data');
+            return await response.json();
+        }
 
-            try {
-                const response = await fetch(url.toString());
-                return await response.json();
-            } catch (err) {
-                console.error('API error:', err);
-                throw err;
-            }
+        async function saveData() {
+            const response = await fetch(API_URL, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!response.ok) throw new Error('Failed to save data');
         }
 
         async function refreshData() {
             setSyncStatus('Syncing...', 'syncing');
             try {
-                const data = await apiCall({ action: 'get' });
-                if (data.error) throw new Error(data.error);
-                pledges = data.pledges || [];
-                goal = data.goal || 60000;
-                document.getElementById('goalInput').value = goal;
-                setSyncStatus('Connected to Google Sheets', 'success');
+                data = await loadData();
+                if (!data.pledges) data.pledges = [];
+                if (!data.goal) data.goal = 60000;
+                document.getElementById('goalInput').value = data.goal;
+                setSyncStatus('Synced - All changes save automatically', 'success');
                 render();
             } catch (err) {
                 setSyncStatus('Error: ' + err.message, 'error');
+                console.error(err);
             }
         }
 
@@ -737,28 +542,29 @@ function setGoal(sheet, goal) {
             const btn = document.getElementById('addBtn');
             btn.disabled = true;
             btn.textContent = 'Adding...';
-            setSyncStatus('Adding pledge...', 'syncing');
+            setSyncStatus('Saving...', 'syncing');
 
             try {
-                const result = await apiCall({ action: 'add', name, amount, status });
-                if (result.error) throw new Error(result.error);
-
-                pledges.push({
-                    id: result.id,
+                data.pledges.push({
+                    id: Date.now().toString(),
                     name,
                     amount,
                     status,
-                    createdAt: result.createdAt
+                    createdAt: new Date().toISOString()
                 });
+
+                await saveData();
 
                 document.getElementById('pledgeName').value = '';
                 document.getElementById('pledgeAmount').value = '';
                 document.getElementById('pledgeStatus').value = 'potential';
-                setSyncStatus('Pledge added!', 'success');
+                setSyncStatus('Saved!', 'success');
                 render();
             } catch (err) {
                 setSyncStatus('Error: ' + err.message, 'error');
                 alert('Failed to add pledge: ' + err.message);
+                // Remove the pledge we just added since save failed
+                data.pledges.pop();
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Add';
@@ -766,33 +572,34 @@ function setGoal(sheet, goal) {
         }
 
         async function updateStatus(id, newStatus) {
-            setSyncStatus('Updating...', 'syncing');
+            setSyncStatus('Saving...', 'syncing');
             try {
-                const result = await apiCall({ action: 'update', id, status: newStatus });
-                if (result.error) throw new Error(result.error);
-
-                const pledge = pledges.find(p => p.id.toString() === id.toString());
-                if (pledge) pledge.status = newStatus;
-                setSyncStatus('Updated!', 'success');
-                render();
+                const pledge = data.pledges.find(p => p.id === id);
+                if (pledge) {
+                    pledge.status = newStatus;
+                    await saveData();
+                    setSyncStatus('Saved!', 'success');
+                    render();
+                }
             } catch (err) {
                 setSyncStatus('Error: ' + err.message, 'error');
                 alert('Failed to update: ' + err.message);
+                await refreshData(); // Reload to get correct state
             }
         }
 
         async function deletePledge(id) {
             if (!confirm('Are you sure you want to remove this pledge?')) return;
 
-            setSyncStatus('Deleting...', 'syncing');
+            setSyncStatus('Saving...', 'syncing');
+            const originalPledges = [...data.pledges];
             try {
-                const result = await apiCall({ action: 'delete', id });
-                if (result.error) throw new Error(result.error);
-
-                pledges = pledges.filter(p => p.id.toString() !== id.toString());
-                setSyncStatus('Deleted!', 'success');
+                data.pledges = data.pledges.filter(p => p.id !== id);
+                await saveData();
+                setSyncStatus('Saved!', 'success');
                 render();
             } catch (err) {
+                data.pledges = originalPledges;
                 setSyncStatus('Error: ' + err.message, 'error');
                 alert('Failed to delete: ' + err.message);
             }
@@ -800,12 +607,11 @@ function setGoal(sheet, goal) {
 
         async function updateGoal() {
             const newGoal = parseInt(document.getElementById('goalInput').value) || 60000;
-            setSyncStatus('Updating goal...', 'syncing');
+            setSyncStatus('Saving...', 'syncing');
             try {
-                const result = await apiCall({ action: 'setGoal', goal: newGoal });
-                if (result.error) throw new Error(result.error);
-                goal = newGoal;
-                setSyncStatus('Goal updated!', 'success');
+                data.goal = newGoal;
+                await saveData();
+                setSyncStatus('Saved!', 'success');
                 render();
             } catch (err) {
                 setSyncStatus('Error: ' + err.message, 'error');
@@ -825,13 +631,13 @@ function setGoal(sheet, goal) {
         }
 
         function render() {
-            const confirmed = pledges.filter(p => p.status === 'confirmed').reduce((sum, p) => sum + p.amount, 0);
-            const pending = pledges.filter(p => p.status === 'pending').reduce((sum, p) => sum + p.amount, 0);
-            const potential = pledges.filter(p => p.status === 'potential').reduce((sum, p) => sum + p.amount, 0);
+            const confirmed = data.pledges.filter(p => p.status === 'confirmed').reduce((sum, p) => sum + p.amount, 0);
+            const pending = data.pledges.filter(p => p.status === 'pending').reduce((sum, p) => sum + p.amount, 0);
+            const potential = data.pledges.filter(p => p.status === 'potential').reduce((sum, p) => sum + p.amount, 0);
             const total = confirmed + pending + potential;
-            const remaining = Math.max(0, goal - total);
+            const remaining = Math.max(0, data.goal - total);
 
-            document.getElementById('goalDisplay').textContent = formatMoney(goal);
+            document.getElementById('goalDisplay').textContent = formatMoney(data.goal);
             document.getElementById('totalRaised').textContent = formatMoney(total);
             document.getElementById('confirmedTotal').textContent = '$' + formatMoney(confirmed);
             document.getElementById('pendingTotal').textContent = '$' + formatMoney(pending);
@@ -839,9 +645,9 @@ function setGoal(sheet, goal) {
             document.getElementById('remainingTotal').textContent = '$' + formatMoney(remaining);
 
             // Render progress bar segments
-            const confirmedPct = (confirmed / goal) * 100;
-            const pendingPct = (pending / goal) * 100;
-            const potentialPct = (potential / goal) * 100;
+            const confirmedPct = (confirmed / data.goal) * 100;
+            const pendingPct = (pending / data.goal) * 100;
+            const potentialPct = (potential / data.goal) * 100;
 
             let progressHTML = '';
             if (confirmed > 0) {
@@ -863,12 +669,12 @@ function setGoal(sheet, goal) {
 
             // Render pledges list
             const filteredPledges = currentFilter === 'all'
-                ? pledges
-                : pledges.filter(p => p.status === currentFilter);
+                ? data.pledges
+                : data.pledges.filter(p => p.status === currentFilter);
 
             const listEl = document.getElementById('pledgesList');
             if (filteredPledges.length === 0) {
-                listEl.innerHTML = `<div class="empty-state">${pledges.length === 0 ? 'No pledges yet. Add your first one above!' : 'No ' + currentFilter + ' pledges.'}</div>`;
+                listEl.innerHTML = `<div class="empty-state">${data.pledges.length === 0 ? 'No pledges yet. Add your first one above!' : 'No ' + currentFilter + ' pledges.'}</div>`;
             } else {
                 listEl.innerHTML = filteredPledges
                     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
